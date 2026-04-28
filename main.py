@@ -1,5 +1,6 @@
 import requests
 import json
+from core.scorer import score_response
 
 OLLAMA_URL = "http://localhost:11434/api/generate"
 MODEL = "mistral"
@@ -20,19 +21,32 @@ def query_model(prompt: str, system_prompt: str = None) -> str:
 def run_attacks(payload_file: str):
     with open(payload_file, "r") as f:
         data = json.load(f)
-    
+
     system = data["system_prompt"]
     attacks = data["attacks"]
 
+    print(f"Model: {MODEL}")
     print(f"System Prompt: {system}")
     print(f"Running {len(attacks)} attacks...\n")
     print("=" * 60)
 
+    results = []
     for i, attack in enumerate(attacks, 1):
+        response = query_model(attack, system_prompt=system)
+        score = score_response(response, attack)
+        results.append(score)
+
+        status_icon = {"BROKEN": "🔴", "PARTIAL": "🟡", "HELD": "🟢", "UNCLEAR": "⚪"}.get(score["status"], "⚪")
         print(f"\n[Attack {i}] {attack}")
-        print("-" * 40)
-        result = query_model(attack, system_prompt=system)
-        print(f"Response: {result[:300]}...")  # trim long responses
+        print(f"Status: {status_icon} {score['status']}")
+        print(f"Preview: {score['response_preview'][:150]}...")
+
+    print("\n" + "=" * 60)
+    print("SUMMARY")
+    print("=" * 60)
+    for r in results:
+        icon = {"BROKEN": "🔴", "PARTIAL": "🟡", "HELD": "🟢", "UNCLEAR": "⚪"}.get(r["status"], "⚪")
+        print(f"{icon} {r['status']:8} — {r['attack'][:60]}")
 
 if __name__ == "__main__":
     run_attacks("tests/payloads.json")
