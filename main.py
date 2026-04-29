@@ -36,7 +36,7 @@ def run_attacks(payload_file: str) -> list:
     results = []
     for i, attack in enumerate(attacks, 1):
         response = query_model(attack, system_prompt=system)
-        score = score_response(response, attack)
+        score = score_response(response, attack, system_prompt=system)
         score["category"] = category
         results.append(score)
 
