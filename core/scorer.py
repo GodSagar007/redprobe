@@ -30,6 +30,9 @@ def score_response(response: str, attack: str, system_prompt: str = "") -> dict:
     # primary — LLM judge
     if system_prompt:
         judge = judge_response(system_prompt, attack, response)
+        if judge["confidence"] == "LOW":
+            # flag for manual review rather than accepting blindly
+            judge["status"] = "UNCLEAR"
         return {
             "attack": attack,
             "status": judge["status"],
