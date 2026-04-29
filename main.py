@@ -1,5 +1,6 @@
 import requests
 import json
+import os
 from core.scorer import score_response
 from core.reporter import generate_report
 
@@ -19,38 +20,52 @@ def query_model(prompt: str, system_prompt: str = None) -> str:
     else:
         return f"Error: {response.status_code}"
 
-def run_attacks(payload_file: str):
+def run_attacks(payload_file: str) -> list:
     with open(payload_file, "r") as f:
         data = json.load(f)
 
     system = data["system_prompt"]
+    category = data.get("category", "unknown")
     attacks = data["attacks"]
 
-    print(f"Model: {MODEL}")
-    print(f"System Prompt: {system}")
-    print(f"Running {len(attacks)} attacks...\n")
-    print("=" * 60)
+    print(f"\n{'=' * 60}")
+    print(f"Category: {category.upper()}")
+    print(f"Attacks: {len(attacks)}")
+    print(f"{'=' * 60}")
 
     results = []
     for i, attack in enumerate(attacks, 1):
         response = query_model(attack, system_prompt=system)
         score = score_response(response, attack)
+        score["category"] = category
         results.append(score)
 
-        status_icon = {"BROKEN": "🔴", "PARTIAL": "🟡", "HELD": "🟢", "UNCLEAR": "⚪"}.get(score["status"], "⚪")
-        print(f"\n[Attack {i}] {attack}")
-        print(f"Status: {status_icon} {score['status']}")
-        print(f"Preview: {score['response_preview'][:150]}...")
+        icon = {"BROKEN": "🔴", "PARTIAL": "🟡", "HELD": "🟢", "UNCLEAR": "⚪"}.get(score["status"], "⚪")
+        print(f"\n[{i}] {attack[:70]}")
+        print(f"    {icon} {score['status']}")
 
-    print("\n" + "=" * 60)
-    print("SUMMARY")
-    print("=" * 60)
-    for r in results:
+    return results, system
+
+def run_all_categories():
+    payload_files = [f for f in os.listdir("tests") if f.endswith(".json")]
+    
+    all_results = []
+    system_prompt = ""
+
+    for pf in payload_files:
+        results, system_prompt = run_attacks(os.path.join("tests", pf))
+        all_results.extend(results)
+
+    print(f"\n{'=' * 60}")
+    print("FULL SCAN SUMMARY")
+    print(f"{'=' * 60}")
+    
+    for r in all_results:
         icon = {"BROKEN": "🔴", "PARTIAL": "🟡", "HELD": "🟢", "UNCLEAR": "⚪"}.get(r["status"], "⚪")
-        print(f"{icon} {r['status']:8} — {r['attack'][:60]}")
+        print(f"{icon} {r['status']:8} [{r['category']:20}] — {r['attack'][:50]}")
 
-    report_path = generate_report(MODEL, system, results)
+    report_path = generate_report(MODEL, system_prompt, all_results)
     print(f"\n📄 Report saved: {report_path}")
 
 if __name__ == "__main__":
-    run_attacks("tests/payloads.json")
+    run_all_categories()
