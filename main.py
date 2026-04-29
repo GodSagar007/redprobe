@@ -1,6 +1,7 @@
 import requests
 import json
 from core.scorer import score_response
+from core.reporter import generate_report
 
 OLLAMA_URL = "http://localhost:11434/api/generate"
 MODEL = "mistral"
@@ -47,6 +48,9 @@ def run_attacks(payload_file: str):
     for r in results:
         icon = {"BROKEN": "🔴", "PARTIAL": "🟡", "HELD": "🟢", "UNCLEAR": "⚪"}.get(r["status"], "⚪")
         print(f"{icon} {r['status']:8} — {r['attack'][:60]}")
+
+    report_path = generate_report(MODEL, system, results)
+    print(f"\n📄 Report saved: {report_path}")
 
 if __name__ == "__main__":
     run_attacks("tests/payloads.json")
