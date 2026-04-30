@@ -136,6 +136,7 @@ Example comparison output:
 ---
 
 ## Project Structure
+```
 redprobe/
 ├── core/
 │   ├── scorer.py       # Scoring pipeline
@@ -149,6 +150,7 @@ redprobe/
 ├── reports/            # Generated reports (gitignored)
 ├── main.py             # CLI entry point
 └── requirements.txt
+```
 
 ## Disclaimer
 
