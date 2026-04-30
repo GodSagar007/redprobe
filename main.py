@@ -1,12 +1,11 @@
-import requests
+import click
 import json
 import os
+import requests
 from core.scorer import score_response
 from core.reporter import generate_report, generate_comparison_report
 
 OLLAMA_URL = "http://localhost:11434/api/generate"
-
-MODELS = ["mistral", "tinyllama"]
 
 def query_model(prompt: str, model: str, system_prompt: str = None) -> str:
     full_prompt = f"System: {system_prompt}\n\nUser: {prompt}" if system_prompt else prompt
@@ -24,7 +23,7 @@ def query_model(prompt: str, model: str, system_prompt: str = None) -> str:
     except Exception as e:
         return f"Error: {str(e)}"
 
-def run_attacks_for_model(model: str, payload_files: list) -> tuple:
+def run_attacks_for_model(model: str, payload_files: list, category_filter: str = None) -> tuple:
     print(f"\n{'=' * 60}")
     print(f"TARGET MODEL: {model.upper()}")
     print(f"{'=' * 60}")
@@ -36,8 +35,12 @@ def run_attacks_for_model(model: str, payload_files: list) -> tuple:
         with open(pf, "r") as f:
             data = json.load(f)
 
-        system_prompt = data["system_prompt"]
         category = data.get("category", "unknown")
+
+        if category_filter and category != category_filter:
+            continue
+
+        system_prompt = data["system_prompt"]
         attacks = data["attacks"]
 
         print(f"\n[{category.upper()}] {len(attacks)} attacks")
@@ -62,6 +65,8 @@ def print_comparison(results_by_model: dict):
 
     for model, results in results_by_model.items():
         total = len(results)
+        if total == 0:
+            continue
         broken = sum(1 for r in results if r["status"] == "BROKEN")
         held = sum(1 for r in results if r["status"] == "HELD")
         unclear = sum(1 for r in results if r["status"] == "UNCLEAR")
@@ -73,24 +78,43 @@ def print_comparison(results_by_model: dict):
         print(f"  ⚪ UNCLEAR: {unclear}/{total}")
         print(f"  📊 Breach Rate: {breach_rate}%")
 
-def run_all():
+@click.command()
+@click.option("--models", "-m", multiple=True, default=["mistral"], show_default=True, help="Models to test")
+@click.option("--payloads", "-p", default="tests/", show_default=True, help="Folder containing payload JSON files")
+@click.option("--category", "-c", default=None, help="Run only a specific attack category")
+@click.option("--output", "-o", default="reports/", show_default=True, help="Output folder for reports")
+def main(models, payloads, category, output):
+    """
+    RedProbe — Local LLM Red-Teaming Framework
+
+    Run adversarial attack suites against local Ollama models
+    and generate structured security reports.
+    """
+
     payload_files = sorted([
-        os.path.join("tests", f)
-        for f in os.listdir("tests")
+        os.path.join(payloads, f)
+        for f in os.listdir(payloads)
         if f.endswith(".json")
     ])
 
-    results_by_model = {}
+    if not payload_files:
+        click.echo("No payload files found.")
+        return
 
-    for model in MODELS:
-        results, system_prompt = run_attacks_for_model(model, payload_files)
+    results_by_model = {}
+    system_prompt = ""
+
+    for model in models:
+        results, system_prompt = run_attacks_for_model(model, payload_files, category)
         results_by_model[model] = results
         report_path = generate_report(model, system_prompt, results)
-        print(f"\n📄 Report saved: {report_path}")
+        click.echo(f"\n📄 Report saved: {report_path}")
 
     print_comparison(results_by_model)
-    comparison_path = generate_comparison_report(results_by_model, system_prompt)
-    print(f"\n📊 Comparison report saved: {comparison_path}")
+
+    if len(models) > 1:
+        comparison_path = generate_comparison_report(results_by_model, system_prompt)
+        click.echo(f"\n📊 Comparison report saved: {comparison_path}")
 
 if __name__ == "__main__":
-    run_all()
+    main()
